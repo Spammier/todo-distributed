@@ -6,6 +6,10 @@ WORKDIR /app
 # Copy go module files
 COPY go.mod ./
 # COPY go.sum ./ # Uncomment if you have go.sum
+
+# Set Go Proxy for faster downloads in certain regions
+ENV GOPROXY=https://goproxy.cn,direct
+
 # Download dependencies
 RUN go mod download
 
