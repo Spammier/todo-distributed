@@ -1,0 +1,40 @@
+# Environment variables
+*.env
+.env*
+!.env.example
+
+# Dependencies (Go & Node)
+/vendor/
+/node_modules/
+
+# Build output
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.out
+
+# Binaries for specific platforms
+*.[oa]
+
+# Go build cache
+/pkg/
+
+# Editor & OS specific
+.idea/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db 

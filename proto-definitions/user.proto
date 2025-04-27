@@ -1,0 +1,54 @@
+// 指定 protobuf 版本为 proto3
+syntax = "proto3";
+
+// 定义包名，有助于防止命名冲突
+package user;
+
+// 指定生成的 Go 代码的包路径
+option go_package = ".;user"; // 或者更具体的路径如 "github.com/your_org/todo-project/proto-definitions/user"
+
+// 定义 UserService 服务
+service UserService {
+  // 用户注册方法
+  rpc Register (RegisterRequest) returns (RegisterResponse);
+  // 用户登录方法
+  rpc Login (LoginRequest) returns (LoginResponse);
+  // 添加修改密码方法
+  rpc ChangePassword (ChangePasswordRequest) returns (ChangePasswordResponse);
+  // (未来可以添加其他方法，如 ChangePassword)
+}
+
+// 注册请求消息
+message RegisterRequest {
+  string username = 1;
+  string password = 2;
+  string email = 3;
+}
+
+// 注册响应消息
+message RegisterResponse {
+  uint32 user_id = 1; // 返回新创建用户的 ID
+}
+
+// 登录请求消息
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+}
+
+// 登录响应消息
+message LoginResponse {
+  string token = 1; // 返回认证使用的 JWT Token
+}
+
+// 修改密码请求消息
+message ChangePasswordRequest {
+  uint32 user_id = 1;       // 需要修改密码的用户 ID
+  string old_password = 2;  // 旧密码用于验证
+  string new_password = 3;  // 新密码
+}
+
+// 修改密码响应消息 (可以为空，表示成功即可)
+message ChangePasswordResponse {}
+
+// (未来可以定义 User 消息结构等) 

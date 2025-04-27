@@ -1,0 +1,161 @@
+version: '3.8' # 使用较新的 Compose 文件格式版本
+
+services:
+  # 前端服务 (Vue + Nginx)
+  frontend:
+    build:
+      context: ./todo-frontend # 指定 Dockerfile 所在的目录
+    ports:
+      - "80:80" # 将宿主机的 80 端口映射到容器的 80 端口
+    container_name: todo_frontend_app # 给容器起个名字
+    restart: always # 容器退出时总是尝试重启
+    depends_on:
+      - api-gateway # 前端依赖 API 网关
+    networks: # 将服务连接到自定义网络
+      - todo-network
+
+  # API 网关 (HTTP -> gRPC)
+  api-gateway:
+    build:
+      context: ./api-gateway # <-- 修改这里，指向 Dockerfile
+    container_name: todo_api_gateway
+    ports:
+      - "8080:8080" # API 网关监听 8080 端口
+    restart: always
+    environment:
+      USER_SERVICE_ADDR: user-service:50051 # 用户服务地址
+      TODO_SERVICE_ADDR: todo-service:50052 # Todo 服务地址
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      PORT: "8080" # 明确指定网关监听的端口
+    depends_on:
+      - user-service
+      - todo-service # 依赖后端 gRPC 服务
+    networks:
+      - todo-network
+
+  # 用户微服务 (gRPC)
+  user-service:
+    build:
+      context: ./user-service # 指定 Dockerfile 路径
+    container_name: todo_user_service
+    restart: always
+    environment:
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+    ports:
+      - "50051:50051" # 映射 gRPC 端口到宿主机，方便本地测试
+    depends_on:
+      - rabbitmq # 添加对 rabbitmq 的依赖
+    networks:
+      - todo-network
+
+  # Todo 微服务 (gRPC)
+  todo-service:
+    build:
+      context: ./todo-service # 指定 Dockerfile 路径
+    container_name: todo_todo_service
+    restart: always
+    environment:
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      REDIS_ADDR: ${REDIS_ADDR}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+    ports: # 取消注释以映射端口
+      - "50052:50052"
+    depends_on:
+      - redis_cache # 依赖 Redis
+    networks:
+      - todo-network
+
+  # Email 微服务 (MQ Consumer)
+  email-service:
+    build: ./email-service # 使用 build context
+    container_name: todo_email_service
+    restart: always
+    environment:
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_SENDER: ${SMTP_SENDER}
+    depends_on:
+      - rabbitmq # 依赖 RabbitMQ
+    networks:
+      - todo-network
+
+  # RabbitMQ 消息队列服务
+  rabbitmq:
+    image: rabbitmq:3-management-alpine # 使用带管理界面的版本
+    container_name: todo_rabbitmq
+    ports:
+      - "5672:5672" # AMQP 协议端口
+      - "15672:15672" # 管理界面端口
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq/ # 持久化数据
+    networks:
+      - todo-network
+
+  # Redis 缓存服务
+  redis_cache:
+    image: redis:alpine # 使用轻量级的 Alpine 版本 Redis 镜像
+    container_name: todo_redis_cache
+    restart: always
+    volumes:
+      - redis_data:/data # 将容器内的 /data 目录映射到命名卷 redis_data
+    networks:
+      - todo-network
+
+# (可选) 如果你需要数据库 (如 MySQL) 和/或缓存 (如 Redis) 服务
+#   mysql_db:
+#     image: mysql:8.0
+#     container_name: todo_mysql_db
+#     restart: always
+#     environment:
+#       MYSQL_ROOT_PASSWORD: root_password # 设置 root 密码
+#       MYSQL_DATABASE: todolist # 创建数据库
+#       MYSQL_USER: user # 创建用户
+#       MYSQL_PASSWORD: password # 设置用户密码
+#     ports:
+#       - "3306:3306" # 将宿主机的 3306 映射到容器的 3306 (方便本地工具连接)
+#     volumes:
+#       - mysql_data:/var/lib/mysql # 持久化数据库数据
+#     networks:
+#       - todo-network
+
+#   redis_cache:
+#     image: redis:alpine
+#     container_name: todo_redis_cache
+#     restart: always
+#     ports:
+#       - "6379:6379" # 将宿主机的 6379 映射到容器的 6379 (方便本地工具连接)
+#     volumes:
+#       - redis_data:/data # 持久化 Redis 数据
+#     networks:
+#       - todo-network
+
+# 定义网络
+networks:
+  todo-network:
+    driver: bridge # 使用默认的 bridge 网络驱动
+
+# (可选) 定义命名卷以持久化数据
+volumes:
+  redis_data: # 定义 Redis 数据卷
+  rabbitmq_data:
+
+# volumes:
+#   mysql_data:
+#   redis_data: 

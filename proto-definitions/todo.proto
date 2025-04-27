@@ -1,0 +1,75 @@
+// 指定 protobuf 版本为 proto3
+syntax = "proto3";
+
+// 定义包名
+package todo;
+
+// 指定生成的 Go 代码的包路径
+option go_package = ".;todo";
+
+import "google/protobuf/timestamp.proto"; // 导入时间戳类型
+import "google/protobuf/empty.proto";     // 导入空消息类型，用于无特定返回值的响应
+
+// Todo 消息结构
+message Todo {
+  uint32 id = 1;
+  uint32 user_id = 2; // 所属用户 ID
+  string title = 3;
+  string description = 4;
+  bool completed = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+// 创建 Todo 请求
+message CreateTodoRequest {
+  uint32 user_id = 1;       // 需要从认证信息中获取
+  string title = 2;
+  string description = 3;
+  // 'completed' 默认为 false
+}
+
+// 获取用户所有 Todo 请求 (需要用户 ID)
+message GetTodosRequest {
+  uint32 user_id = 1;       // 需要从认证信息中获取
+}
+
+// 获取用户所有 Todo 响应
+message GetTodosResponse {
+  repeated Todo todos = 1; // 返回 Todo 列表
+}
+
+// 获取单个 Todo 请求
+message GetTodoByIDRequest {
+  uint32 user_id = 1;       // 需要从认证信息中获取，用于权限检查
+  uint32 todo_id = 2;
+}
+
+// 更新 Todo 请求
+message UpdateTodoRequest {
+  uint32 user_id = 1;       // 需要从认证信息中获取，用于权限检查
+  uint32 todo_id = 2;
+  string title = 3;         // 发送需要更新的字段
+  string description = 4;
+  bool completed = 5;
+}
+
+// 删除 Todo 请求
+message DeleteTodoRequest {
+  uint32 user_id = 1;       // 需要从认证信息中获取，用于权限检查
+  uint32 todo_id = 2;
+}
+
+// 定义 TodoService 服务
+service TodoService {
+  // 创建新的 Todo
+  rpc CreateTodo (CreateTodoRequest) returns (Todo); // 返回创建后的 Todo
+  // 获取指定用户的所有 Todo
+  rpc GetTodos (GetTodosRequest) returns (GetTodosResponse);
+  // 获取单个 Todo
+  rpc GetTodoByID (GetTodoByIDRequest) returns (Todo);
+  // 更新 Todo
+  rpc UpdateTodo (UpdateTodoRequest) returns (Todo); // 返回更新后的 Todo
+  // 删除 Todo
+  rpc DeleteTodo (DeleteTodoRequest) returns (google.protobuf.Empty); // 成功则返回空
+} 
