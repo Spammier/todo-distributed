@@ -1,6 +1,6 @@
 # Todo Distributed - 分布式 Todo 应用
 
-这是一个使用 Go 微服务和 Vue.js 构建的分布式 Todo 列表应用程序。
+这是一个使用 Go 微服务和 Vue.js 构建的分布式 Todo 列表应用程序
 
 ## 功能特性
 
