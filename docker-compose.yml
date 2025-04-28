@@ -5,33 +5,35 @@ services:
   frontend:
     build:
       context: ./todo-frontend # 指定 Dockerfile 所在的目录
-    ports:
-      - "80:80" # 将宿主机的 80 端口映射到容器的 80 端口
+    # ports:  # 移除端口映射，由反向代理处理
+    #   - "80:80"
     container_name: todo_frontend_app # 给容器起个名字
     restart: always # 容器退出时总是尝试重启
     depends_on:
       - api-gateway # 前端依赖 API 网关
     networks: # 将服务连接到自定义网络
       - todo-network
+      - shared-network # <--- 添加到共享网络
 
   # API 网关 (HTTP -> gRPC)
   api-gateway:
     build:
       context: ./api-gateway # <-- 修改这里，指向 Dockerfile
     container_name: todo_api_gateway
-    ports:
-      - "8080:8080" # API 网关监听 8080 端口
+    # ports: # 移除端口映射，由反向代理处理
+    #   - "8080:8080"
     restart: always
     environment:
       USER_SERVICE_ADDR: user-service:50051 # 用户服务地址
       TODO_SERVICE_ADDR: todo-service:50052 # Todo 服务地址
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
-      PORT: "8080" # 明确指定网关监听的端口
+      PORT: "8080" # 网关容器内部监听的端口
     depends_on:
       - user-service
       - todo-service # 依赖后端 gRPC 服务
     networks:
       - todo-network
+      - shared-network # <--- 添加到共享网络
 
   # 用户微服务 (gRPC)
   user-service:
@@ -47,12 +49,12 @@ services:
       DB_NAME: ${DB_NAME}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       RABBITMQ_URL: ${RABBITMQ_URL}
-    ports:
-      - "50051:50051" # 映射 gRPC 端口到宿主机，方便本地测试
+    # ports: # gRPC 端口通常不需要映射到宿主机，除非用于外部调试
+    #   - "50051:50051"
     depends_on:
       - rabbitmq # 添加对 rabbitmq 的依赖
     networks:
-      - todo-network
+      - todo-network # 只需连接到内部网络
 
   # Todo 微服务 (gRPC)
   todo-service:
@@ -69,12 +71,12 @@ services:
       REDIS_ADDR: ${REDIS_ADDR}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
-    ports: # 取消注释以映射端口
-      - "50052:50052"
+    # ports: # gRPC 端口通常不需要映射到宿主机
+    #   - "50052:50052"
     depends_on:
       - redis_cache # 依赖 Redis
     networks:
-      - todo-network
+      - todo-network # 只需连接到内部网络
 
   # Email 微服务 (MQ Consumer)
   email-service:
@@ -91,22 +93,24 @@ services:
     depends_on:
       - rabbitmq # 依赖 RabbitMQ
     networks:
-      - todo-network
+      - todo-network # 只需连接到内部网络
 
   # RabbitMQ 消息队列服务
   rabbitmq:
     image: rabbitmq:3-management-alpine # 使用带管理界面的版本
     container_name: todo_rabbitmq
     ports:
-      - "5672:5672" # AMQP 协议端口
+      # 保留管理界面端口映射，方便访问
       - "15672:15672" # 管理界面端口
+    # 移除 5672 映射，内部服务通过网络连接
+    #   - "5672:5672"
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq/ # 持久化数据
     networks:
-      - todo-network
+      - todo-network # 只需连接到内部网络
 
   # Redis 缓存服务
   redis_cache:
@@ -116,7 +120,7 @@ services:
     volumes:
       - redis_data:/data # 将容器内的 /data 目录映射到命名卷 redis_data
     networks:
-      - todo-network
+      - todo-network # 只需连接到内部网络
 
 # (可选) 如果你需要数据库 (如 MySQL) 和/或缓存 (如 Redis) 服务
 #   mysql_db:
@@ -149,7 +153,9 @@ services:
 # 定义网络
 networks:
   todo-network:
-    driver: bridge # 使用默认的 bridge 网络驱动
+    driver: bridge # 应用内部网络
+  shared-network: # <--- 定义共享网络
+    external: true # <--- 标记为外部已存在网络
 
 # (可选) 定义命名卷以持久化数据
 volumes:

@@ -41,19 +41,48 @@ type server struct {
 // Define the queue name
 const userRegisteredQueue = "user_registered_queue"
 
-// Function to connect to RabbitMQ
+// --- 新增：RabbitMQ 连接重试参数 ---
+const (
+	maxRabbitMQRetries = 5               // 最大重试次数
+	rabbitMQRetryDelay = 5 * time.Second // 重试间隔时间
+)
+
+// Function to connect to RabbitMQ with retries
 func connectRabbitMQ() error {
 	rabbitURL := os.Getenv("RABBITMQ_URL")
 	if rabbitURL == "" {
 		log.Println("RABBITMQ_URL not set, skipping RabbitMQ connection.")
 		return nil // Allow service to run without RabbitMQ for local dev if needed
-		// return fmt.Errorf("RABBITMQ_URL environment variable not set")
 	}
 
 	var err error
-	rabbitConn, err = amqp091.Dial(rabbitURL)
-	if err != nil {
-		return fmt.Errorf("failed to connect to RabbitMQ: %w", err)
+	var attempt int // 重试次数计数器
+
+	for attempt = 1; attempt <= maxRabbitMQRetries; attempt++ {
+		log.Printf("尝试连接 RabbitMQ (第 %d 次)... URL: %s", attempt, rabbitURL)
+		rabbitConn, err = amqp091.Dial(rabbitURL)
+		if err == nil {
+			// 连接成功，跳出循环
+			log.Println("成功连接到 RabbitMQ。")
+			break
+		}
+
+		log.Printf("连接 RabbitMQ 失败 (第 %d 次): %v", attempt, err)
+		if attempt == maxRabbitMQRetries {
+			// 达到最大重试次数，返回最后一次错误
+			log.Printf("达到最大重试次数 (%d)，放弃连接 RabbitMQ。", maxRabbitMQRetries)
+			return fmt.Errorf("failed to connect to RabbitMQ after %d attempts: %w", maxRabbitMQRetries, err)
+		}
+
+		log.Printf("等待 %v 后重试...", rabbitMQRetryDelay)
+		time.Sleep(rabbitMQRetryDelay) // 等待一段时间后重试
+	}
+
+	// --- 连接成功后，继续打开通道和声明队列 ---
+
+	// 如果连接失败（虽然理论上前面的 break 和 return 会处理，但作为保险）
+	if rabbitConn == nil {
+		return fmt.Errorf("RabbitMQ connection is nil after retry loop")
 	}
 
 	rabbitChannel, err = rabbitConn.Channel()
@@ -77,7 +106,7 @@ func connectRabbitMQ() error {
 		return fmt.Errorf("failed to declare a queue: %w", err)
 	}
 
-	log.Println("Successfully connected to RabbitMQ and declared queue")
+	log.Println("成功打开 RabbitMQ 通道并声明队列")
 	return nil
 }
 
@@ -142,7 +171,7 @@ func (s *server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Reg
 	log.Printf("用户注册成功: ID=%d, Username=%s, Email=%s", newUser.ID, newUser.Username, newUser.Email)
 
 	// --- Publish UserRegistered event to RabbitMQ --- (Best effort)
-	if rabbitChannel != nil {
+	if rabbitChannel != nil { // 现在这个检查更有意义，因为我们会重试连接
 		messageBody := map[string]interface{}{
 			"user_id":  newUser.ID,
 			"username": newUser.Username,
@@ -175,7 +204,7 @@ func (s *server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Reg
 			}
 		}
 	} else {
-		log.Println("RabbitMQ channel 未初始化，跳过事件发布。")
+		log.Println("RabbitMQ channel 未初始化或连接失败，跳过事件发布。") // 更新日志信息
 	}
 
 	return &pb.RegisterResponse{UserId: uint32(newUser.ID)}, nil
@@ -309,12 +338,13 @@ func main() {
 	}
 	jwtKey = []byte(jwtSecret) // Assign to global variable
 
-	// ---- 3.5 初始化 RabbitMQ 连接 ----
+	// ---- 3.5 初始化 RabbitMQ 连接 (带重试) ----
 	if err := connectRabbitMQ(); err != nil {
 		// Log the error but allow the service to potentially continue without MQ
-		log.Printf("无法连接到 RabbitMQ: %v. 事件发布功能将不可用。", err)
+		log.Printf("无法连接到 RabbitMQ (经过重试): %v. 事件发布功能将不可用。", err)
+		// 注意：这里不再调用 defer 关闭，因为连接/通道可能未成功打开
 	} else {
-		// Defer closing connection and channel if successfully connected
+		// Defer closing connection and channel only if successfully connected
 		defer func() {
 			if rabbitChannel != nil {
 				rabbitChannel.Close()
