@@ -28,6 +28,7 @@ services:
       TODO_SERVICE_ADDR: todo-service:50052 # Todo 服务地址
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       PORT: "8080" # 网关容器内部监听的端口
+      APP_ENV: container
     depends_on:
       - user-service
       - todo-service # 依赖后端 gRPC 服务
@@ -49,6 +50,7 @@ services:
       DB_NAME: ${DB_NAME}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       RABBITMQ_URL: ${RABBITMQ_URL}
+      APP_ENV: container
     # ports: # gRPC 端口通常不需要映射到宿主机，除非用于外部调试
     #   - "50051:50051"
     depends_on:
@@ -71,6 +73,7 @@ services:
       REDIS_ADDR: ${REDIS_ADDR}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
+      APP_ENV: container
     # ports: # gRPC 端口通常不需要映射到宿主机
     #   - "50052:50052"
     depends_on:
@@ -90,6 +93,7 @@ services:
       SMTP_USER: ${SMTP_USER}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       SMTP_SENDER: ${SMTP_SENDER}
+      APP_ENV: container
     depends_on:
       - rabbitmq # 依赖 RabbitMQ
     networks:

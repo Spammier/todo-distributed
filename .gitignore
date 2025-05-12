@@ -6,6 +6,7 @@
 # Dependencies (Go & Node)
 /vendor/
 /node_modules/
+**/node_modules/
 
 # Build output
 *.exe
@@ -14,6 +15,14 @@
 *.so
 *.dylib
 *.out
+**/dist/
+**/build/
+
+# Compiled binaries
+/todo-service/todo-service
+/user-service/user-service
+/api-gateway/api-gateway
+/email-service/email-service
 
 # Binaries for specific platforms
 *.[oa]
@@ -30,6 +39,11 @@
 *.sln.docstates
 *.log
 
+# Logs
+/logs/
+**/*.log
+**/logs/
+
 # OS generated files
 .DS_Store
 .DS_Store?
@@ -37,4 +51,17 @@
 .Spotlight-V100
 .Trashes
 ehthumbs.db
-Thumbs.db 
+Thumbs.db
+
+# Docker related
+.dockerignore
+docker-compose.override.yml
+
+# Cache files
+**/.cache/
+**/tmp/
+**/temp/
+
+# Test files
+**/coverage/
+**/.nyc_output/ 

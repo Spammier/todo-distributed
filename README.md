@@ -87,18 +87,54 @@
 
 ```text
 .
-├── api-gateway/       # API 网关 (Gin HTTP -> gRPC)
-├── docker-compose.yml # Docker Compose 配置文件
-├── email-service/     # 邮件服务 (RabbitMQ Consumer)
-├── .env.example       # 环境变量示例文件
-├── .gitignore         # Git 忽略文件配置
-├── password-hasher/   # (辅助工具) 生成 bcrypt 密码哈希
-├── proto-definitions/ # Protocol Buffers 定义文件
-├── README.md          # 本文件
-├── todo-frontend/     # 前端 Vue.js 应用
-├── todo-service/      # 待办事项微服务 (gRPC)
-└── user-service/      # 用户微服务 (gRPC)
+├── api-gateway/               # API 网关 (Gin HTTP -> gRPC)
+│   ├── cmd/api-gateway/       # 程序入口点
+│   ├── internal/              # 内部包
+│   │   ├── config/            # 配置加载
+│   │   ├── handlers/          # HTTP处理器
+│   │   ├── middleware/        # HTTP中间件
+│   │   └── models/            # 数据模型
+│   └── proto/                 # 生成的protobuf代码
+├── docker-compose.yml         # Docker Compose 配置文件
+├── email-service/             # 邮件服务 (RabbitMQ Consumer)
+│   ├── cmd/email-service/     # 程序入口点
+│   └── internal/              # 内部包
+│       ├── config/            # 配置加载
+│       ├── mail/              # 邮件发送
+│       └── mq/                # 消息队列处理
+├── .env.example               # 环境变量示例文件
+├── .gitignore                 # Git 忽略文件配置
+├── password-hasher/           # (辅助工具) 生成 bcrypt 密码哈希
+├── proto-definitions/         # Protocol Buffers 定义文件
+├── README.md                  # 本文件
+├── todo-frontend/             # 前端 Vue.js 应用
+├── todo-service/              # 待办事项微服务 (gRPC)
+│   ├── cmd/todo-service/      # 程序入口点
+│   └── internal/              # 内部包
+│       ├── config/            # 配置加载
+│       ├── db/                # 数据库和Redis连接
+│       ├── model/             # 数据模型
+│       ├── service/           # gRPC服务实现
+│       └── util/              # 辅助函数
+└── user-service/              # 用户微服务 (gRPC)
+    ├── cmd/user-service/      # 程序入口点
+    └── internal/              # 内部包
+        ├── config/            # 配置加载
+        ├── database/          # 数据库连接
+        ├── models/            # 数据模型
+        ├── mq/                # 消息队列处理
+        └── service/           # gRPC服务实现
 ```
+
+## 项目设计
+
+项目遵循Go语言的标准项目布局和最佳实践：
+
+* **cmd/**: 包含各个服务的主要入口点
+* **internal/**: 包含不对外暴露的包，防止外部导入
+* **proto/**: 包含生成的protobuf代码
+* **依赖注入**: 通过参数传递依赖，避免全局变量
+* **接口分离**: 使用接口进行解耦，便于测试和扩展
 
 ## 注意事项
 

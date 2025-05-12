@@ -2,6 +2,7 @@ package database
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	"gorm.io/driver/mysql"
@@ -15,12 +16,32 @@ var DB *gorm.DB
 func InitDB() error {
 	var err error
 
-	// 初始化数据库连接 (从环境变量获取配置)
-	dbUser := getEnvOrDefault("DB_USER", "root")
-	dbPass := os.Getenv("DB_PASSWORD") // 密码通常不设默认值
-	dbHost := getEnvOrDefault("DB_HOST", "localhost")
-	dbPort := getEnvOrDefault("DB_PORT", "3306")
-	dbName := getEnvOrDefault("DB_NAME", "todo")
+	// 检查当前环境
+	appEnv := getEnvOrDefault("APP_ENV", "development")
+	log.Printf("当前运行环境: %s", appEnv)
+
+	// 根据环境选择不同的配置
+	var dbUser, dbPass, dbHost, dbPort, dbName string
+
+	if appEnv == "production" || appEnv == "container" {
+		// 生产环境或容器环境 - 使用环境变量
+		dbUser = getEnvOrDefault("DB_USER", "root")
+		dbPass = os.Getenv("DB_PASSWORD")
+		dbHost = getEnvOrDefault("DB_HOST", "mysql") // 容器默认使用服务名
+		dbPort = getEnvOrDefault("DB_PORT", "3306")
+		dbName = getEnvOrDefault("DB_NAME", "todo")
+	} else {
+		// 开发/测试环境 - 使用硬编码值或本地环境变量
+		dbUser = "root"
+		dbPass = "" // 与 todo-service 相同的密码
+		dbHost = "127.0.0.1"
+		dbPort = "3306"
+		dbName = getEnvOrDefault("DB_NAME", "todo")
+	}
+
+	log.Printf("数据库连接配置: User=%s, Host=%s, Port=%s, DB=%s",
+		dbUser, dbHost, dbPort, dbName)
+
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
 		dbUser, dbPass, dbHost, dbPort, dbName)
 
@@ -29,7 +50,7 @@ func InitDB() error {
 		return fmt.Errorf("数据库连接失败: %w", err)
 	}
 
-	fmt.Println("成功连接到数据库")
+	log.Println("成功连接到数据库")
 	return nil
 }
 

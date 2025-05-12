@@ -40,58 +40,98 @@
         <p>暂无待办事项，快来添加吧！</p>
       </div>
       
-      <div v-else class="todo-list">
-        <div 
-          v-for="todo in todos" 
-          :key="todo.id" 
-          class="todo-item card"
-          :class="{ completed: todo.completed, editing: editingTodoId === todo.id }"
-        >
-          <div v-if="editingTodoId === todo.id" class="edit-form">
-            <input type="text" v-model="editFormData.title" placeholder="标题" class="edit-input-title" required>
-            <textarea v-model="editFormData.description" placeholder="描述" class="edit-textarea-desc" rows="2"></textarea>
-            <div class="edit-actions">
-              <button @click="saveEdit(todo.id)" class="save-btn" :disabled="isSubmittingEdit">保存</button>
-              <button @click="cancelEdit" class="cancel-btn">取消</button>
-            </div>
-            <div v-if="editError" class="error-message">{{ editError }}</div>
+      <div v-else>
+        <!-- 批量操作栏 -->
+        <div class="batch-actions card" v-if="todos.length > 0">
+          <div class="select-all">
+            <input 
+              type="checkbox" 
+              id="selectAll" 
+              :checked="selectedTodos.length === todos.length && todos.length > 0"
+              :indeterminate="selectedTodos.length > 0 && selectedTodos.length < todos.length"
+              @change="toggleSelectAll"
+            />
+            <label for="selectAll">全选</label>
           </div>
-          
-          <div v-else>
-            <div class="todo-header">
-              <div class="todo-title">
-                <input 
-                  type="checkbox" 
-                  :checked="todo.completed"
-                  @change="toggleTodoStatus(todo)"
-                />
-                <h3>{{ todo.title }}</h3>
+          <div class="batch-buttons" v-if="selectedTodos.length > 0">
+            <span class="selected-count">已选择 {{ selectedTodos.length }} 项</span>
+            <button 
+              class="batch-complete-btn" 
+              @click="batchUpdateStatus('MARK_AS_COMPLETED')"
+              :disabled="isBatchUpdating || selectedCompletedCount === selectedTodos.length"
+            >
+              标记为已完成
+            </button>
+            <button 
+              class="batch-incomplete-btn" 
+              @click="batchUpdateStatus('MARK_AS_INCOMPLETE')"
+              :disabled="isBatchUpdating || selectedCompletedCount === 0"
+            >
+              标记为未完成
+            </button>
+          </div>
+        </div>
+
+        <div class="todo-list">
+          <div 
+            v-for="todo in todos" 
+            :key="todo.id" 
+            class="todo-item card"
+            :class="{ completed: todo.completed, editing: editingTodoId === todo.id, selected: isSelected(todo.id) }"
+          >
+            <div v-if="editingTodoId === todo.id" class="edit-form">
+              <input type="text" v-model="editFormData.title" placeholder="标题" class="edit-input-title" required>
+              <textarea v-model="editFormData.description" placeholder="描述" class="edit-textarea-desc" rows="2"></textarea>
+              <div class="edit-actions">
+                <button @click="saveEdit(todo.id)" class="save-btn" :disabled="isSubmittingEdit">保存</button>
+                <button @click="cancelEdit" class="cancel-btn">取消</button>
               </div>
-              <div class="todo-actions">
-                <button 
-                  class="edit-btn" 
-                  @click="startEdit(todo)"
-                  :disabled="isDeleting[todo.id]"
-                >
-                  编辑
-                </button>
-                <button 
-                  class="delete-btn" 
-                  @click="deleteTodo(todo.id)"
-                  :disabled="isDeleting[todo.id]"
-                >
-                  删除
-                </button>
+              <div v-if="editError" class="error-message">{{ editError }}</div>
+            </div>
+            
+            <div v-else>
+              <div class="todo-header">
+                <div class="todo-title">
+                  <input 
+                    type="checkbox" 
+                    :checked="todo.completed"
+                    @change="toggleTodoStatus(todo)"
+                    class="status-checkbox"
+                  />
+                  <input 
+                    type="checkbox" 
+                    :checked="isSelected(todo.id)"
+                    @change="toggleSelectTodo(todo.id)"
+                    class="select-checkbox"
+                  />
+                  <h3>{{ todo.title }}</h3>
+                </div>
+                <div class="todo-actions">
+                  <button 
+                    class="edit-btn" 
+                    @click="startEdit(todo)"
+                    :disabled="isDeleting[todo.id]"
+                  >
+                    编辑
+                  </button>
+                  <button 
+                    class="delete-btn" 
+                    @click="deleteTodo(todo.id)"
+                    :disabled="isDeleting[todo.id]"
+                  >
+                    删除
+                  </button>
+                </div>
               </div>
-            </div>
-            <div class="todo-description">
-              {{ todo.description }}
-            </div>
-            <div class="todo-footer">
-              <small>创建于: {{ formatDate(todo.created_at) }}</small>
-              <small v-if="todo.updated_at !== todo.created_at">
-                更新于: {{ formatDate(todo.updated_at) }}
-              </small>
+              <div class="todo-description">
+                {{ todo.description }}
+              </div>
+              <div class="todo-footer">
+                <small>创建于: {{ formatDate(todo.created_at) }}</small>
+                <small v-if="todo.updated_at !== todo.created_at">
+                  更新于: {{ formatDate(todo.updated_at) }}
+                </small>
+              </div>
             </div>
           </div>
         </div>
@@ -113,8 +153,16 @@ export default {
     const isSubmitting = ref(false)
     const isDeleting = reactive({})
     const isSubmittingEdit = ref(false)
+    const isBatchUpdating = ref(false)
     
     const todos = computed(() => store.getters.todos)
+    const selectedTodos = ref([])
+    
+    const selectedCompletedCount = computed(() => {
+      return todos.value.filter(todo => 
+        selectedTodos.value.includes(todo.id) && todo.completed
+      ).length
+    })
     
     const newTodo = ref({
       title: '',
@@ -124,6 +172,49 @@ export default {
     const editingTodoId = ref(null)
     const editFormData = reactive({ title: '', description: '' })
     const editError = ref('')
+    
+    // 判断待办事项是否被选中
+    const isSelected = (todoId) => {
+      return selectedTodos.value.includes(todoId)
+    }
+    
+    // 切换单个待办事项的选中状态
+    const toggleSelectTodo = (todoId) => {
+      const index = selectedTodos.value.indexOf(todoId)
+      if (index === -1) {
+        selectedTodos.value.push(todoId)
+      } else {
+        selectedTodos.value.splice(index, 1)
+      }
+    }
+    
+    // 全选/取消全选
+    const toggleSelectAll = (e) => {
+      if (e.target.checked) {
+        selectedTodos.value = todos.value.map(todo => todo.id)
+      } else {
+        selectedTodos.value = []
+      }
+    }
+    
+    // 批量更新待办事项状态
+    const batchUpdateStatus = async (action) => {
+      if (selectedTodos.value.length === 0) return
+      
+      isBatchUpdating.value = true
+      try {
+        await store.dispatch('batchUpdateTodos', {
+          todoIds: selectedTodos.value,
+          action: action
+        })
+        // 成功后清空选中
+        selectedTodos.value = []
+      } catch (error) {
+        console.error('批量更新待办事项失败:', error)
+      } finally {
+        isBatchUpdating.value = false
+      }
+    }
     
     // 获取所有待办事项
     const fetchTodos = async () => {
@@ -173,6 +264,11 @@ export default {
       isDeleting[todoId] = true
       try {
         await store.dispatch('deleteTodo', todoId)
+        // 如果被删除的待办事项在选中列表中，需要从选中列表中移除
+        const selectedIndex = selectedTodos.value.indexOf(todoId)
+        if (selectedIndex !== -1) {
+          selectedTodos.value.splice(selectedIndex, 1)
+        }
       } catch (error) {
         console.error('删除待办事项失败:', error)
       } finally {
@@ -235,7 +331,10 @@ export default {
       isSubmitting,
       isDeleting,
       isSubmittingEdit,
+      isBatchUpdating,
       todos,
+      selectedTodos,
+      selectedCompletedCount,
       newTodo,
       handleAddTodo,
       toggleTodoStatus,
@@ -246,7 +345,11 @@ export default {
       editError,
       startEdit,
       saveEdit,
-      cancelEdit
+      cancelEdit,
+      isSelected,
+      toggleSelectTodo,
+      toggleSelectAll,
+      batchUpdateStatus
     }
   }
 }
@@ -359,6 +462,66 @@ textarea {
   cursor: not-allowed;
 }
 
+/* 批量操作区域样式 */
+.batch-actions {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 25px !important;
+}
+
+.select-all {
+  display: flex;
+  align-items: center;
+}
+
+.select-all label {
+  margin-left: 8px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.batch-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.selected-count {
+  margin-right: 10px;
+  font-size: 0.9rem;
+  color: var(--dark-text-secondary, #a0a0b3);
+}
+
+.batch-complete-btn, .batch-incomplete-btn {
+  padding: 6px 12px;
+  border-radius: var(--border-radius-small, 4px);
+  cursor: pointer;
+  font-size: 0.85rem;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.batch-complete-btn {
+  background-color: var(--primary-color, #4CAF50);
+  color: white;
+}
+
+.batch-incomplete-btn {
+  background-color: var(--secondary-color, #FF9800);
+  color: white;
+}
+
+.batch-complete-btn:hover:not(:disabled), .batch-incomplete-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.batch-complete-btn:disabled, .batch-incomplete-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 /* 待办事项列表 */
 .todo-list {
@@ -382,6 +545,10 @@ textarea {
   /* 使用继承的背景，仅改变边框和文本样式 */
   border-left: 4px solid var(--primary-color-dark, #388E3C);
   padding-left: 36px; /* 调整左 padding 以适应边框 (40px - 4px) */
+}
+
+.todo-item.selected {
+  border: 2px solid var(--accent-color, #22c55e);
 }
 
 .todo-item.completed .todo-title h3 {
@@ -512,8 +679,9 @@ textarea {
   border-color: var(--dark-text-secondary, #a0a0b3);
 }
 
-/* Checkbox 自定义 (可选，提供更现代外观) */
-input[type="checkbox"] {
+/* 复选框样式 - 状态和选择 */
+.status-checkbox, 
+.select-checkbox {
   appearance: none;
   -webkit-appearance: none;
   background-color: var(--dark-input-bg, #1e1e30);
@@ -527,12 +695,28 @@ input[type="checkbox"] {
   vertical-align: middle; /* 垂直居中 */
 }
 
-input[type="checkbox"]:checked {
+.status-checkbox {
+  margin-right: 5px;
+}
+
+.select-checkbox {
+  margin-right: 10px;
+  border-color: var(--accent-color, #22c55e);
+}
+
+.status-checkbox:checked,
+.select-checkbox:checked {
   background-color: var(--primary-color, #4CAF50);
   border-color: var(--primary-color, #4CAF50);
 }
 
-input[type="checkbox"]:checked::after {
+.select-checkbox:checked {
+  background-color: var(--accent-color, #22c55e);
+  border-color: var(--accent-color, #22c55e);
+}
+
+.status-checkbox:checked::after,
+.select-checkbox:checked::after {
   content: '\2714'; /* 勾号 */
   font-size: 12px; /* 勾号大小 */
   color: white;
@@ -541,11 +725,12 @@ input[type="checkbox"]:checked::after {
   top: 50%;
   transform: translate(-50%, -50%);
 }
-input[type="checkbox"]:focus {
-  outline: none;
-   box-shadow: 0 0 0 3px rgba(var(--primary-color-rgb, 76, 175, 80), 0.3);
-}
 
+.status-checkbox:focus,
+.select-checkbox:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(var(--primary-color-rgb, 76, 175, 80), 0.3);
+}
 
 /* 加载和空状态 */
 .loading, .empty-state {
@@ -570,5 +755,4 @@ input[type="checkbox"]:focus {
   font-size: 0.9rem;
   border-left: 3px solid var(--danger-color-dark, #c62828);
 }
-
 </style> 

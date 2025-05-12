@@ -145,6 +145,35 @@ export default createStore({
       } catch (error) {
         throw error
       }
+    },
+    
+    // 批量更新待办事项状态
+    async batchUpdateTodos({ commit, state }, { todoIds, action }) {
+      try {
+        const response = await axios.patch('/todos/batch', {
+          todo_ids: todoIds,
+          action: action // 'MARK_AS_COMPLETED' 或 'MARK_AS_INCOMPLETE'
+        })
+        
+        // 成功后，更新本地状态
+        const isCompleted = action === 'MARK_AS_COMPLETED'
+        todoIds.forEach(id => {
+          const todo = state.todos.find(t => t.id === id)
+          if (todo) {
+            // 创建更新后的待办事项对象
+            const updatedTodo = { 
+              ...todo, 
+              completed: isCompleted,
+              updated_at: new Date().toISOString() // 临时更新时间，实际会被服务器返回的覆盖
+            }
+            commit('UPDATE_TODO', updatedTodo)
+          }
+        })
+        
+        return response
+      } catch (error) {
+        throw error
+      }
     }
   }
 }) 

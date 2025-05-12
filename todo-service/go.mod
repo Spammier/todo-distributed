@@ -4,6 +4,7 @@ go 1.24.1
 
 require (
 	github.com/go-redis/redis/v8 v8.11.5
+	github.com/joho/godotenv v1.5.1
 	google.golang.org/grpc v1.72.0
 	google.golang.org/protobuf v1.36.6
 	gorm.io/driver/mysql v1.5.7

@@ -72,4 +72,24 @@ service TodoService {
   rpc UpdateTodo (UpdateTodoRequest) returns (Todo); // 返回更新后的 Todo
   // 删除 Todo
   rpc DeleteTodo (DeleteTodoRequest) returns (google.protobuf.Empty); // 成功则返回空
-} 
+
+  // --- 新增：批量更新 Todos --- //
+  // 批量更新用户的一系列 Todo (例如：批量标记完成/未完成)
+  rpc BatchUpdateTodos (BatchUpdateTodosRequest) returns (google.protobuf.Empty);
+}
+
+// --- 新增：批量更新 Todos 请求 --- //
+message BatchUpdateTodosRequest {
+  uint32 user_id = 1;       // 需要从认证信息中获取，用于权限检查
+  repeated uint32 todo_ids = 2; // 要操作的 Todo ID 列表
+
+  enum ActionType {
+    ACTION_TYPE_UNSPECIFIED = 0;
+    MARK_AS_COMPLETED = 1;    // 标记为已完成
+    MARK_AS_INCOMPLETE = 2;   // 标记为未完成
+    // 未来可以扩展如 BATCH_DELETE 等
+  }
+  ActionType action = 3;      // 执行的具体操作
+}
+
+// 注意: 目前 BatchUpdateTodosResponse 使用 google.protobuf.Empty，如果需要返回更详细的信息（例如部分成功），可以定义一个新的响应消息 

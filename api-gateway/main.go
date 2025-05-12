@@ -403,6 +403,50 @@ func main() {
 					}
 					c.Status(http.StatusNoContent) // 删除成功返回 204
 				})
+
+				// 批量更新 Todos 状态
+				todos.PATCH("/batch", func(c *gin.Context) {
+					var reqBody struct {
+						TodoIDs []uint32 `json:"todo_ids" binding:"required"`
+						Action  string   `json:"action" binding:"required,oneof=MARK_AS_COMPLETED MARK_AS_INCOMPLETE"`
+					}
+					if err := c.ShouldBindJSON(&reqBody); err != nil {
+						c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求数据: " + err.Error()})
+						return
+					}
+
+					userID, _ := c.Get("user_id")
+
+					// 将字符串 action 转换为枚举值
+					var actionEnum todopb.BatchUpdateTodosRequest_ActionType
+					switch reqBody.Action {
+					case "MARK_AS_COMPLETED":
+						actionEnum = todopb.BatchUpdateTodosRequest_MARK_AS_COMPLETED
+					case "MARK_AS_INCOMPLETE":
+						actionEnum = todopb.BatchUpdateTodosRequest_MARK_AS_INCOMPLETE
+					default:
+						// 理论上不会到这里，因为绑定验证已经检查了
+						c.JSON(http.StatusBadRequest, gin.H{"error": "无效的操作类型"})
+						return
+					}
+
+					grpcReq := &todopb.BatchUpdateTodosRequest{
+						UserId:  userID.(uint32),
+						TodoIds: reqBody.TodoIDs,
+						Action:  actionEnum,
+					}
+
+					ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+					defer cancel()
+
+					_, err := todoClient.BatchUpdateTodos(ctx, grpcReq)
+					if err != nil {
+						handleGrpcError(c, err, "批量更新待办事项失败")
+						return
+					}
+
+					c.JSON(http.StatusOK, gin.H{"message": "批量更新成功"})
+				})
 			}
 		}
 	}
